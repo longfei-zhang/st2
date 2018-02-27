@@ -14,8 +14,10 @@
 # limitations under the License.
 
 import httplib
+import json
 
 import mock
+from oslo_config import cfg
 
 import st2common.validators.api.action as action_validator
 from st2common.models.db.auth import UserDB
@@ -135,4 +137,75 @@ class ActionExecutionRBACControllerTestCase(BaseActionExecutionControllerTestCas
         self.use_user(user_db)
 
         resp = self.app.get('/v1/actionexecutions?limit=-1')
-        self.assertEqual(resp.status_code, httplib.OK)
+        self.assertEqual(resp.status_code, http_client.OK)
+
+    def test_get_respective_actions(self):
+        cfg.CONF.set_override(name='permission_isolation', override=True,
+                              group='rbac')
+        data = {
+            'action': 'wolfpack.action-1',
+            'parameters': {
+                'actionstr': 'foo'
+            }
+        }
+
+        # User with admin role assignment
+        user_db = self.users['admin']
+        self.use_user(user_db)
+
+        resp = self._do_post(data)
+        self.assertEqual(resp.status_code, http_client.CREATED)
+
+        resp1 = self.app.get('/v1/actionexecutions?limit=-1')
+
+        # User with multiple roles assignment
+        user_db = self.users['multiple_roles']
+        self.use_user(user_db)
+
+        resp = self._do_post(data)
+        self.assertEqual(resp.status_code, http_client.CREATED)
+        resp = self._do_post(data)
+        self.assertEqual(resp.status_code, http_client.CREATED)
+
+        resp2 = self.app.get('/v1/actionexecutions?limit=-1')
+
+        self.assertEqual(len(json.loads(resp1.body)), 1)
+        self.assertEqual(len(json.loads(resp2.body)), 2)
+
+    def test_get_respective_actions_positive_limit(self):
+        cfg.CONF.set_override(name='permission_isolation', override=True,
+                              group='rbac')
+        data = {
+            'action': 'wolfpack.action-1',
+            'parameters': {
+                'actionstr': 'foo'
+            }
+        }
+
+        # User with admin role assignment
+        user_db = self.users['admin']
+        self.use_user(user_db)
+
+        resp = self._do_post(data)
+        self.assertEqual(resp.status_code, http_client.CREATED)
+
+        resp1 = self.app.get('/v1/actionexecutions?limit=1')
+
+        # User with multiple roles assignment
+        user_db = self.users['multiple_roles']
+        self.use_user(user_db)
+
+        resp = self._do_post(data)
+        self.assertEqual(resp.status_code, http_client.CREATED)
+        resp = self._do_post(data)
+        self.assertEqual(resp.status_code, http_client.CREATED)
+
+        resp2 = self.app.get('/v1/actionexecutions?limit=1')
+
+        user_db = self.users['observer']
+        self.use_user(user_db)
+        resp3 = self.app.get('/v1/actionexecutions?limit=1')
+
+        self.assertEqual(len(json.loads(resp1.body)), 1)
+        self.assertEqual(len(json.loads(resp2.body)), 1)
+        self.assertEqual(len(json.loads(resp3.body)), 0)
