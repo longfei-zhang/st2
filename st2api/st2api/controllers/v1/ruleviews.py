@@ -19,6 +19,7 @@ from mongoengine.queryset import Q
 
 from st2common import log as logging
 from st2api.controllers import resource
+from st2api.controllers.resource import BaseResourceIsolationControllerMixin
 from st2common.models.api.rule import RuleViewAPI
 from st2common.models.system.common import ResourceReference
 from st2common.persistence.action import Action
@@ -34,7 +35,7 @@ LOG = logging.getLogger(__name__)
 __all__ = ['RuleViewController']
 
 
-class RuleViewController(resource.ContentPackResourceController):
+class RuleViewController(BaseResourceIsolationControllerMixin, resource.ContentPackResourceController):
     """
     Add some extras to a Rule object to make it easier for UI to render a rule. The additions
     do not necessarily belong in the Rule itself but are still valuable augmentations.
@@ -96,8 +97,9 @@ class RuleViewController(resource.ContentPackResourceController):
         return rules
 
     def get_one(self, ref_or_id, requester_user):
-        rule = self._get_one(ref_or_id, permission_type=PermissionType.RULE_VIEW,
-                             requester_user=requester_user)
+        rule = super(RuleViewController, self)._get_one(ref_or_id,
+                                                        permission_type=PermissionType.RULE_VIEW,
+                                                        requester_user=requester_user)
         result = self._append_view_properties([rule.json])[0]
         rule.json = result
         return rule

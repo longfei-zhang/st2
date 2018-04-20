@@ -27,7 +27,7 @@ from six.moves import http_client
 
 from st2api.controllers.base import BaseRestControllerMixin
 from st2api.controllers.resource import ResourceController
-from st2api.controllers.resource import BeseResourceIsolationHandlerMixin
+from st2api.controllers.resource import BaseResourceIsolationControllerMixin
 from st2api.controllers.v1.executionviews import ExecutionViewsController
 from st2api.controllers.v1.executionviews import SUPPORTED_FILTERS
 from st2common import log as logging
@@ -259,12 +259,9 @@ class ActionExecutionChildrenController(BaseActionExecutionNestedController):
         :rtype: ``list``
         """
 
-        instance = self._get_by_id(resource_id=id)
-
-        permission_type = PermissionType.EXECUTION_VIEW
-        rbac_utils.assert_user_has_resource_db_permission(user_db=requester_user,
-                                                          resource_db=instance,
-                                                          permission_type=permission_type)
+        execution_db = self._get_one_by_id(id=id, requester_user=requester_user,
+                                           permission_type=PermissionType.EXECUTION_VIEW)
+        id = str(execution_db.id)
 
         return self._get_children(id_=id, depth=depth, result_fmt=result_fmt,
                                   requester_user=requester_user, show_secrets=show_secrets)
@@ -312,9 +309,14 @@ class ActionExecutionOutputController(ActionExecutionsControllerMixin, ResourceC
         # Special case for id == "last"
         if id == 'last':
             execution_db = ActionExecution.query().order_by('-id').limit(1).first()
-        else:
-            execution_db = self._get_one_by_id(id=id, requester_user=requester_user,
-                                               permission_type=PermissionType.EXECUTION_VIEW)
+
+            if not execution_db:
+                raise ValueError('No executions found in the database')
+
+            id = str(execution_db.id)
+
+        execution_db = self._get_one_by_id(id=id, requester_user=requester_user,
+                                           permission_type=PermissionType.EXECUTION_VIEW)
 
         execution_id = str(execution_db.id)
 
@@ -483,7 +485,7 @@ class ActionExecutionReRunController(ActionExecutionsControllerMixin, ResourceCo
                                                show_secrets=show_secrets)
 
 
-class ActionExecutionsController(BeseResourceIsolationHandlerMixin,
+class ActionExecutionsController(BaseResourceIsolationControllerMixin,
                                  ActionExecutionsControllerMixin, ResourceController):
     """
         Implements the RESTful web endpoint that handles
@@ -570,6 +572,9 @@ class ActionExecutionsController(BeseResourceIsolationHandlerMixin,
         if id == 'last':
             execution_db = ActionExecution.query().order_by('-id').limit(1).only('id').first()
             id = str(execution_db.id)
+
+            if not execution_db:
+                raise ValueError('No executions found in the database')
 
         return self._get_one_by_id(id=id, exclude_fields=exclude_fields,
                                    requester_user=requester_user,
